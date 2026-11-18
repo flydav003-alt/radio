@@ -34,11 +34,6 @@
     night: ['夜間模式（柔和低音／高音）', [-6, -4, -1, 0, -1, -3, -5]],
   };
   const THEMES = { obsidian: '黑曜鎏金', tokyo: '東京夜雨', rose: '玫瑰松林', torii: '京都鳥居', rosewater: '玫瑰（淺色）' };
-  const THEME_META = { // [bg for theme-color, accent, accent2, light?]
-    obsidian: ['#0b0a09', '#d4af6a', '#8a6a2f'], tokyo: ['#12131d', '#7aa2f7', '#bb9af7'],
-    rose: ['#15121f', '#eb6f92', '#c4a7e7'], torii: ['#190c0e', '#ff6a3d', '#c0392b'],
-    rosewater: ['#fcf5f7', '#d6336c', '#e8a0bf', true],
-  };
   const VIZ_STYLES = [['長條', 'bars'], ['鏡像', 'mirror'], ['波形', 'wave'], ['圓環', 'circle'], ['關閉', 'off']];
   const AMBIENT = { off: 0, soft: 0.55, strong: 1 };
   const NOTE_DEFAULT = '已自動排除新聞、談話類電台。網頁版只顯示 https 電台；電台有沒有人說話由電台自己決定，播到主持人就換下一台。';
@@ -658,8 +653,8 @@
     }
     get idle() { return !this.live && this.bass === 0 && this.pulse < 0.01 && !this.vals.some((x) => x > 0); }
     col(which, frac, a, phase) {
-      const m = THEME_META[S.theme] || THEME_META.tokyo;
-      let [h, s, l] = hexToHsl(which === 2 ? m[2] : m[1]);
+      const pal = window.RDTheme.pal;
+      let [h, s, l] = hexToHsl(which === 2 ? pal.ACC_LO : pal.FOCUS_HI);
       if (tintHue != null && S.coverColor) { h = tintHue; s = Math.max(s * 0.8, 0.6); }
       h = (h + 0.10 * Math.sin(phase * 2 * Math.PI) + (frac - 0.5) * 0.09 + 1) % 1;
       return `hsla(${Math.round(h * 360)},${Math.round(s * 100)}%,${Math.round(l * 100)}%,${a})`;
@@ -781,8 +776,7 @@
 
   // ---------------------------------------------------------------- theme + dialogs
   function applyTheme() {
-    document.documentElement.dataset.theme = S.theme;
-    $('themeColor').setAttribute('content', (THEME_META[S.theme] || THEME_META.tokyo)[0]);
+    window.RDTheme.apply(S.theme);
     if (vizMain) { vizMain.drawnIdle = false; }
   }
   function openSettings() {
