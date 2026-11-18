@@ -1,0 +1,18 @@
+{
+  "name": "RadioDeck 網路電台",
+  "short_name": "RadioDeck",
+  "description": "網路電台播放器：搜尋、國家／類型篩選、我的最愛、EQ 與頻譜",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#12131d",
+  "theme_color": "#12131d",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
