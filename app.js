@@ -443,9 +443,20 @@
     let urls = [];
     for (const u of st.urls) urls.push(...await resolvePlaylist(u));
     if (token !== P.token) return;
-    urls = urls.map((u) => (/^http:\/\//i.test(u) ? u.replace(/^http:/i, 'https:') : u)).filter((u) => /^https:\/\//i.test(u));
+    urls = [...new Set(urls.flatMap(httpsCandidates))];
     if (!urls.length) return fail(token, '這個電台沒有 https 網址，網頁版無法播放');
     openUrl(urls, 0, token, st, false);
+  }
+  // A page served over https cannot play http audio. Try the https twin of an http address instead:
+  // a known twin (the same station under its domain name) first, then the same host over https.
+  const TWINS = { '141.164.38.238': 'arafm.duckdns.org' };
+  function httpsCandidates(u) {
+    if (/^https:\/\//i.test(u)) return [u];
+    if (!/^http:\/\//i.test(u)) return [];
+    const out = [];
+    try { const p = new URL(u); if (TWINS[p.hostname]) { p.hostname = TWINS[p.hostname]; p.protocol = 'https:'; p.port = ''; out.push(p.href); } } catch (e) { /* ignore */ }
+    out.push(u.replace(/^http:/i, 'https:'));
+    return out;
   }
   function fail(token, msg) {
     if (token !== P.token) return;
@@ -560,10 +571,7 @@
     const line = NP.text ? `♪  ${NP.text}` : stationSub(st);
     $('cardSub').textContent = line; $('cardSub').title = line; $('vfSub').textContent = line;
     document.title = NP.text ? `${NP.text} — ${st.name}` : `${st.name} — RadioDeck`;
-    const q = encodeURIComponent(NP.text || '');
     $('songBtns').hidden = !NP.text; $('cardSub').classList.toggle('song', !!NP.text);
-    $('ggSong').href = 'https://www.google.com/search?q=' + q;
-    $('ytSong').href = 'https://www.youtube.com/results?search_query=' + q;
     setMediaSession(st);
   }
   async function copySong() {
@@ -573,10 +581,13 @@
     const b = $('copySong'); b.textContent = '✓ 已複製'; setTimeout(() => { b.textContent = '📋 複製歌名'; }, 1300);
   }
   $('copySong').addEventListener('click', copySong);
+  const openSearch = (base) => { if (NP.text) window.open(base + encodeURIComponent(NP.text), '_blank', 'noopener'); };
+  $('ggSong').addEventListener('click', () => openSearch('https://www.google.com/search?q='));
+  $('ytSong').addEventListener('click', () => openSearch('https://www.youtube.com/results?search_query='));
   $('cardSub').addEventListener('click', () => { if (NP.text && !String(getSelection())) copySong(); });
   function startNowPlaying(st) {
     stopNowPlaying();
-    const token = NP.token; const url = st.urls[0];
+    const token = NP.token; const url = httpsCandidates(st.urls[0])[0] || st.urls[0];
     const tick = async () => {
       let text = '';
       try { text = await npLookup(url, st.name); } catch (e) { text = ''; }
@@ -1018,11 +1029,12 @@
     $('addForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const url = $('addUrl').value.trim();
-      if (!/^https:\/\//i.test(url)) { alert('網址要以 https:// 開頭（網頁版無法播放 http 電台）。'); return; }
+      if (!/^https?:\/\//i.test(url)) { alert('網址要以 http:// 或 https:// 開頭。'); return; }
       let host = ''; try { host = new URL(url).hostname; } catch (err) { alert('網址格式不正確。'); return; }
       const name = $('addName').value.trim() || host;
       if (!favKeys().has(url)) { S.favorites.push({ name, urls: [url], cc: '', tags: [], custom: true }); saveNow(); }
       dlg.close(); setView('fav');
+      if (/^http:/i.test(url)) setNote('已加入。這是 http 網址，網頁版會改用 https 嘗試播放；如果該電台不支援 https 就播不出來（桌面版不受影響）。');
     });
   }
 

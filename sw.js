@@ -1,6 +1,6 @@
 /* App-shell cache only. Radio streams and API calls always go straight to the network. */
 const CACHE = 'radiodeck-v6';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'theme.js', 'manifest.webmanifest',
+const SHELL = ['./', 'index.html', 'style.css?v=6', 'app.js?v=6', 'theme.js?v=6', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
