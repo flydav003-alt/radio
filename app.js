@@ -393,6 +393,7 @@
     return true;
   }
   function teardown() {
+    stopNowPlaying();
     if (P.hls) { try { P.hls.destroy(); } catch (e) { /* ignore */ } P.hls = null; }
     if (P.audio) {
       const a = P.audio; P.audio = null;
@@ -508,9 +509,74 @@
     setNow(st.name, stationSub(st));
     setNote(enhanced ? '' : (S.enhanced ? '這個電台不開放頻譜／EQ 功能，已改用一般播放。' : ''));
     $('vizHint').textContent = enhanced ? '' : '此電台不支援頻譜與 EQ';
-    markRows(); updateSelectionUi(); startTimer(); setMediaSession(st); fetchCover(st.favicon);
+    markRows(); updateSelectionUi(); startTimer(); setMediaSession(st); fetchCover(st.favicon); startNowPlaying(st);
   }
-  function setStatus(text) { if (P.station) $('cardSub').textContent = text || stationSub(P.station); }
+  // ---------------------------------------------------------------- now playing (song title)
+  // Browsers can only read this from servers that allow cross-origin requests (AzuraCast, SomaFM and most Icecast status pages do).
+  const NP = { token: 0, timer: null, text: '' };
+  const songText = (artist, title) => {
+    artist = String(artist || '').trim(); title = String(title || '').trim();
+    const t = !artist ? title : !title ? artist : (title.toLowerCase().includes(artist.toLowerCase()) ? title : `${artist} — ${title}`);
+    return ['', '-', 'unknown', 'n/a', 'unknown - unknown', 'null'].includes(t.toLowerCase()) ? '' : t;
+  };
+  async function getJson(url, ms = 6000) {
+    const r = await fetchT(url, ms);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  async function npLookup(streamUrl, stationName) {
+    let u; try { u = new URL(streamUrl); } catch (e) { return ''; }
+    const host = u.hostname.toLowerCase(); const path = u.pathname || ''; let text = '';
+    try {
+      if (host.endsWith('somafm.com')) {
+        const slug = path.replace(/^\/+/, '').split('/')[0].replace(/-\d+-(mp3|aac|aacp)$/, '').replace(/\.pls$/, '');
+        const d = await getJson('https://somafm.com/channels.json');
+        const ch = (d.channels || []).find((c) => c && c.id === slug);
+        if (ch) text = songText(ch.lastPlaying);
+      } else {
+        const m = path.match(/^\/listen\/([^/]+)\//);
+        if (m) { // AzuraCast
+          const d = await getJson(`${u.origin}/api/nowplaying/${m[1]}`);
+          const song = (d.now_playing || {}).song || {};
+          text = songText(song.artist, song.title) || songText(song.text);
+        }
+      }
+    } catch (e) { text = ''; }
+    if (!text && !/\.(m3u8?|pls|asx)(\?|$)/i.test(path)) {
+      try { // Icecast status page
+        const d = await getJson(`${u.origin}/status-json.xsl`, 5000);
+        let src = (d.icestats || {}).source;
+        src = (Array.isArray(src) ? src : [src]).filter((x) => x && typeof x === 'object');
+        const pick = src.find((x) => { try { return new URL(String(x.listenurl)).pathname === path; } catch (e) { return false; } }) || (src.length === 1 ? src[0] : null);
+        if (pick) text = pick.artist ? songText(pick.artist, pick.title) : songText(pick.title);
+      } catch (e) { /* this server does not allow cross-origin reads */ }
+    }
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+    if (norm(stationName) && norm(text) === norm(stationName)) return ''; // some stations just repeat their own name
+    return text.slice(0, 160);
+  }
+  function refreshNowLine() {
+    const st = P.station; if (!st) return;
+    const line = NP.text ? `♪  ${NP.text}` : stationSub(st);
+    $('cardSub').textContent = line; $('cardSub').title = line; $('vfSub').textContent = line;
+    document.title = NP.text ? `${NP.text} — ${st.name}` : `${st.name} — RadioDeck`;
+    setMediaSession(st);
+  }
+  function startNowPlaying(st) {
+    stopNowPlaying();
+    const token = NP.token; const url = st.urls[0];
+    const tick = async () => {
+      let text = '';
+      try { text = await npLookup(url, st.name); } catch (e) { text = ''; }
+      if (token !== NP.token) return;
+      if (text !== NP.text) { NP.text = text; refreshNowLine(); }
+      NP.timer = setTimeout(tick, 15000);
+    };
+    tick();
+  }
+  function stopNowPlaying() { NP.token++; clearTimeout(NP.timer); NP.timer = null; NP.text = ''; }
+
+  function setStatus(text) { if (P.station) $('cardSub').textContent = text || (NP.text ? `♪  ${NP.text}` : stationSub(P.station)); }
   function stopStation(keep) {
     P.token++; teardown(); stopTimer();
     if (!keep) P.last = null;
@@ -533,7 +599,7 @@
     if (!('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: st.name, artist: stationSub(st) || 'RadioDeck', album: 'RadioDeck',
+        title: NP.text || st.name, artist: NP.text ? st.name : (stationSub(st) || 'RadioDeck'), album: 'RadioDeck',
         artwork: st.favicon ? [{ src: st.favicon, sizes: '256x256' }] : [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       });
       navigator.mediaSession.playbackState = 'playing';
@@ -781,6 +847,94 @@
     try { if (window.RDTheme) window.RDTheme.apply(S.theme); } catch (e) { /* theme.js problem: keep the default colours */ }
     if (vizMain) { vizMain.drawnIdle = false; }
   }
+  // ---------------------------------------------------------------- favourites backup (same JSON format as the desktop app)
+  function cleanFavorite(d) {
+    if (!d || typeof d !== 'object') return null;
+    const urls = (Array.isArray(d.urls) ? d.urls : []).filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim())).map((u) => u.trim()).slice(0, 5);
+    if (!urls.length) return null;
+    let host = ''; try { host = new URL(urls[0]).host; } catch (e) { /* keep empty */ }
+    const out = {
+      name: String(d.name || '').trim() || host || urls[0], urls, cc: String(d.cc || '').toUpperCase().slice(0, 3),
+      tags: (Array.isArray(d.tags) ? d.tags : []).filter((t) => typeof t === 'string').map((t) => t.slice(0, 40)).slice(0, 6),
+      bitrate: Math.max(0, parseInt(d.bitrate, 10) || 0),
+    };
+    if (d.custom) out.custom = true;
+    if (typeof d.favicon === 'string' && /^https?:\/\//i.test(d.favicon)) out.favicon = d.favicon;
+    return out;
+  }
+  function favoritesToJson() {
+    const items = S.favorites.map(cleanFavorite).filter(Boolean);
+    return { text: JSON.stringify({ app: 'RadioDeck', version: 1, exported: new Date().toISOString(), favorites: items }, null, 2), count: items.length };
+  }
+  function parseFavorites(text) {
+    text = String(text || '').trim().replace(/^﻿/, '');
+    if (!text) throw new Error('內容是空的。');
+    let data; try { data = JSON.parse(text); } catch (e) { throw new Error('格式不正確，請貼上從 RadioDeck 匯出的完整文字。'); }
+    if (data && !Array.isArray(data) && typeof data === 'object') data = data.favorites;
+    if (!Array.isArray(data)) throw new Error('找不到最愛電台清單。');
+    const items = data.map(cleanFavorite).filter(Boolean);
+    if (!items.length) throw new Error('沒有找到可匯入的電台。');
+    return items;
+  }
+  function importFavorites(text) { // merge: keeps what you already have, adds the new ones at the end
+    const items = parseFavorites(text);
+    const have = favKeys(); let added = 0; let http = 0;
+    items.forEach((f) => {
+      if (have.has(f.urls[0])) return;
+      S.favorites.push(f); have.add(f.urls[0]); added++;
+      if (!f.urls.some((u) => /^https:/i.test(u))) http++;
+    });
+    saveNow();
+    if (S.view === 'fav') reload(); else { markRows(); updateSelectionUi(); }
+    return { added, skipped: items.length - added, http };
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall back below */ }
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove(); return ok;
+  }
+  function downloadText(name, text) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name;
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function buildBackupSection(body) {
+    const h = document.createElement('h3'); h3text(h, '最愛備份'); body.append(h);
+    const hint = document.createElement('p'); hint.className = 'hint';
+    hint.textContent = '最愛只存在這個瀏覽器。換手機、換瀏覽器前先匯出；格式和桌面版相同，兩邊可以互相匯入。';
+    const ta = document.createElement('textarea'); ta.id = 'favBox'; ta.rows = 4; ta.spellcheck = false;
+    ta.placeholder = '匯入：把匯出的文字貼在這裡，再按「匯入文字」';
+    const msg = document.createElement('p'); msg.className = 'hint'; msg.setAttribute('role', 'status');
+    const say = (t) => { msg.textContent = t; };
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label; b.addEventListener('click', fn); return b; };
+    const row1 = document.createElement('div'); row1.className = 'fav-actions';
+    const row2 = document.createElement('div'); row2.className = 'fav-actions';
+    const file = document.createElement('input'); file.type = 'file'; file.accept = '.json,application/json,text/plain'; file.hidden = true;
+    row1.append(
+      mk('複製最愛', async () => {
+        const { text, count } = favoritesToJson();
+        if (!count) { say('目前沒有最愛電台可以匯出。'); return; }
+        ta.value = text; say((await copyText(text)) ? `已複製 ${count} 個最愛電台。` : `已放進上方文字框（${count} 個），請手動全選複製。`);
+      }),
+      mk('下載檔案', () => {
+        const { text, count } = favoritesToJson();
+        if (!count) { say('目前沒有最愛電台可以匯出。'); return; }
+        downloadText('radiodeck-favorites.json', text); say(`已下載 ${count} 個最愛電台。`);
+      }),
+    );
+    const report = (r) => say(`匯入完成：新增 ${r.added} 個` + (r.skipped ? `，${r.skipped} 個已在最愛裡（略過）` : '') + (r.http ? `；其中 ${r.http} 個是 http 電台，網頁版無法播放` : '') + '。');
+    row2.append(
+      mk('匯入文字', () => { try { report(importFavorites(ta.value)); } catch (e) { say(`匯入失敗：${e.message}`); } }),
+      mk('從檔案匯入', () => file.click()),
+    );
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0]; file.value = ''; if (!f) return;
+      try { report(importFavorites(await f.text())); } catch (e) { say(`匯入失敗：${e.message}`); }
+    });
+    body.append(hint, ta, row1, row2, file, msg);
+  }
+  const h3text = (el, t) => { el.textContent = t; };
+
   function openSettings() {
     const dlg = $('setDlg'); const body = $('setBody'); body.replaceChildren();
     const h2 = document.createElement('h2'); h2.textContent = '設定'; body.append(h2);
@@ -820,6 +974,7 @@
     });
     syncSliders();
     hint('EQ 與頻譜只對「允許跨網域讀取」的電台有效。音量超過 100% 同樣只在這類電台有效（iPhone 請用機身音量鍵）。');
+    buildBackupSection(body);
     const hi = document.createElement('p'); hi.className = 'hint';
     hi.textContent = '安裝成 App：Android／電腦 Chrome 按右上角「安裝」；iPhone 用 Safari 按分享 →「加入主畫面」。';
     body.append(hi);
