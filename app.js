@@ -443,7 +443,7 @@
     let urls = [];
     for (const u of st.urls) urls.push(...await resolvePlaylist(u));
     if (token !== P.token) return;
-    urls = urls.filter((u) => /^https:\/\//i.test(u));
+    urls = urls.map((u) => (/^http:\/\//i.test(u) ? u.replace(/^http:/i, 'https:') : u)).filter((u) => /^https:\/\//i.test(u));
     if (!urls.length) return fail(token, '這個電台沒有 https 網址，網頁版無法播放');
     openUrl(urls, 0, token, st, false);
   }
@@ -866,14 +866,29 @@
     const items = S.favorites.map(cleanFavorite).filter(Boolean);
     return { text: JSON.stringify({ app: 'RadioDeck', version: 1, exported: new Date().toISOString(), favorites: items }, null, 2), count: items.length };
   }
+  function favoritesToText() { // one station per line: "name | url"
+    const items = S.favorites.map(cleanFavorite).filter(Boolean);
+    return { text: items.map((f) => `${f.name.replace(/\s*\|\s*/g, ' ')} | ${f.urls[0]}`).join('\n'), count: items.length };
+  }
   function parseFavorites(text) {
     text = String(text || '').trim().replace(/^﻿/, '');
     if (!text) throw new Error('內容是空的。');
-    let data; try { data = JSON.parse(text); } catch (e) { throw new Error('格式不正確，請貼上從 RadioDeck 匯出的完整文字。'); }
-    if (data && !Array.isArray(data) && typeof data === 'object') data = data.favorites;
-    if (!Array.isArray(data)) throw new Error('找不到最愛電台清單。');
+    let data;
+    if (/^[\[{]/.test(text)) { // full JSON backup (file download / older exports)
+      try { data = JSON.parse(text); } catch (e) { throw new Error('格式不正確，請貼上從 RadioDeck 匯出的完整文字。'); }
+      if (data && !Array.isArray(data) && typeof data === 'object') data = data.favorites;
+      if (!Array.isArray(data)) throw new Error('找不到最愛電台清單。');
+    } else { // short list: "name | url" per line, or just a URL per line
+      data = [];
+      text.split(/\r?\n/).forEach((line) => {
+        line = line.trim(); if (!line || line.startsWith('#')) return;
+        const m = line.match(/https?:\/\/\S+/i); if (!m) return;
+        const name = line.slice(0, m.index).replace(/[\s|\-–—:：,，\t]+$/, '').trim();
+        data.push({ name, urls: [m[0]], custom: true });
+      });
+    }
     const items = data.map(cleanFavorite).filter(Boolean);
-    if (!items.length) throw new Error('沒有找到可匯入的電台。');
+    if (!items.length) throw new Error('沒有找到可匯入的電台。每行寫一個：電台名稱 | 網址');
     return items;
   }
   function importFavorites(text) { // merge: keeps what you already have, adds the new ones at the end
@@ -899,32 +914,32 @@
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   function buildBackupSection(body) {
-    const h = document.createElement('h3'); h3text(h, '最愛備份'); body.append(h);
+    const h = document.createElement('h3'); h.textContent = '最愛備份'; body.append(h);
     const hint = document.createElement('p'); hint.className = 'hint';
-    hint.textContent = '最愛只存在這個瀏覽器。換手機、換瀏覽器前先匯出；格式和桌面版相同，兩邊可以互相匯入。';
-    const ta = document.createElement('textarea'); ta.id = 'favBox'; ta.rows = 4; ta.spellcheck = false;
-    ta.placeholder = '匯入：把匯出的文字貼在這裡，再按「匯入文字」';
+    hint.textContent = '最愛只存在這個瀏覽器。換手機、換瀏覽器前先「複製清單」，到新的地方貼在下面再按「匯入貼上的清單」。每行一個電台，和桌面版互通。';
+    const ta = document.createElement('textarea'); ta.id = 'favBox'; ta.rows = 5; ta.spellcheck = false;
+    ta.placeholder = '要匯入的清單貼在這裡\n每行一個：電台名稱 | 網址';
     const msg = document.createElement('p'); msg.className = 'hint'; msg.setAttribute('role', 'status');
     const say = (t) => { msg.textContent = t; };
     const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label; b.addEventListener('click', fn); return b; };
     const row1 = document.createElement('div'); row1.className = 'fav-actions';
     const row2 = document.createElement('div'); row2.className = 'fav-actions';
-    const file = document.createElement('input'); file.type = 'file'; file.accept = '.json,application/json,text/plain'; file.hidden = true;
+    const file = document.createElement('input'); file.type = 'file'; file.accept = '.json,.txt,application/json,text/plain'; file.hidden = true;
     row1.append(
-      mk('複製最愛', async () => {
-        const { text, count } = favoritesToJson();
+      mk('複製清單', async () => {
+        const { text, count } = favoritesToText();
         if (!count) { say('目前沒有最愛電台可以匯出。'); return; }
-        ta.value = text; say((await copyText(text)) ? `已複製 ${count} 個最愛電台。` : `已放進上方文字框（${count} 個），請手動全選複製。`);
+        ta.value = text; say((await copyText(text)) ? `已複製 ${count} 個最愛電台，到新的地方貼上匯入。` : `已放進上方文字框（${count} 個），請手動全選複製。`);
       }),
-      mk('下載檔案', () => {
+      mk('下載完整備份檔', () => {
         const { text, count } = favoritesToJson();
         if (!count) { say('目前沒有最愛電台可以匯出。'); return; }
-        downloadText('radiodeck-favorites.json', text); say(`已下載 ${count} 個最愛電台。`);
+        downloadText('radiodeck-favorites.json', text); say(`已下載 ${count} 個最愛電台（完整備份檔）。`);
       }),
     );
-    const report = (r) => say(`匯入完成：新增 ${r.added} 個` + (r.skipped ? `，${r.skipped} 個已在最愛裡（略過）` : '') + (r.http ? `；其中 ${r.http} 個是 http 電台，網頁版無法播放` : '') + '。');
+    const report = (r) => say(`匯入完成：新增 ${r.added} 個` + (r.skipped ? `，${r.skipped} 個已在最愛裡（略過）` : '') + (r.http ? `；其中 ${r.http} 個是 http 網址，網頁版會嘗試改用 https，不一定播得出來` : '') + '。');
     row2.append(
-      mk('匯入文字', () => { try { report(importFavorites(ta.value)); } catch (e) { say(`匯入失敗：${e.message}`); } }),
+      mk('匯入貼上的清單', () => { try { report(importFavorites(ta.value)); } catch (e) { say(`匯入失敗：${e.message}`); } }),
       mk('從檔案匯入', () => file.click()),
     );
     file.addEventListener('change', async () => {
