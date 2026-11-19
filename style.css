@@ -127,6 +127,10 @@ select option { background: var(--panel-s); color: var(--text); }
 .nowcard { background: var(--raised-a); border: 1px solid var(--acc-border); border-radius: 14px; padding: 10px 14px; }
 .eyebrow { display: flex; justify-content: space-between; color: var(--acc-text); font-size: 11px; font-weight: 700; }
 .eyebrow #timeLabel { color: var(--faint); font-weight: 400; }
+.songbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.songbtns[hidden] { display: none; }
+.btn.mini { padding: 4px 10px; font-size: 12px; min-height: 0; text-decoration: none; display: inline-flex; align-items: center; }
+#cardSub.song { cursor: pointer; user-select: text; -webkit-user-select: text; }
 .cardtitle { font-size: 17px; font-weight: 700; margin-top: 2px; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nowcard .muted { color: var(--faint); font-size: 12px; }
 .vizwrap { position: relative; height: 64px; border-radius: 14px; border: 1px solid var(--line); background: var(--base-a); overflow: hidden; cursor: pointer; }

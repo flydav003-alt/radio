@@ -560,8 +560,20 @@
     const line = NP.text ? `♪  ${NP.text}` : stationSub(st);
     $('cardSub').textContent = line; $('cardSub').title = line; $('vfSub').textContent = line;
     document.title = NP.text ? `${NP.text} — ${st.name}` : `${st.name} — RadioDeck`;
+    const q = encodeURIComponent(NP.text || '');
+    $('songBtns').hidden = !NP.text; $('cardSub').classList.toggle('song', !!NP.text);
+    $('ggSong').href = 'https://www.google.com/search?q=' + q;
+    $('ytSong').href = 'https://www.youtube.com/results?search_query=' + q;
     setMediaSession(st);
   }
+  async function copySong() {
+    const text = NP.text; if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e2) {} t.remove(); }
+    const b = $('copySong'); b.textContent = '✓ 已複製'; setTimeout(() => { b.textContent = '📋 複製歌名'; }, 1300);
+  }
+  $('copySong').addEventListener('click', copySong);
+  $('cardSub').addEventListener('click', () => { if (NP.text && !String(getSelection())) copySong(); });
   function startNowPlaying(st) {
     stopNowPlaying();
     const token = NP.token; const url = st.urls[0];
@@ -574,7 +586,7 @@
     };
     tick();
   }
-  function stopNowPlaying() { NP.token++; clearTimeout(NP.timer); NP.timer = null; NP.text = ''; }
+  function stopNowPlaying() { NP.token++; clearTimeout(NP.timer); NP.timer = null; NP.text = ''; $('songBtns').hidden = true; $('cardSub').classList.remove('song'); }
 
   function setStatus(text) { if (P.station) $('cardSub').textContent = text || (NP.text ? `♪  ${NP.text}` : stationSub(P.station)); }
   function stopStation(keep) {
