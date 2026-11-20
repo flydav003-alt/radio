@@ -34,10 +34,10 @@
     night: ['夜間模式（柔和低音／高音）', [-6, -4, -1, 0, -1, -3, -5]],
   };
   const THEMES = { obsidian: '黑曜鎏金', tokyo: '東京夜雨', rose: '玫瑰松林', torii: '京都鳥居', rosewater: '玫瑰（淺色）',
-    aurora: '極光夜空', graphite: '石墨古銅', forest: '霧鎖山林', dune: '暮光沙丘', washi: '和紙藍染（淺色）' };
+    aurora: '極光夜空', dune: '暮光沙丘', slate: '霧灰藍（中性）', greige: '暖沙灰（中性）', washi: '和紙藍染（淺色）' };
   const VIZ_STYLES = [['長條', 'bars'], ['鏡像', 'mirror'], ['波形', 'wave'], ['圓環', 'circle'], ['關閉', 'off']];
   const AMBIENT = { off: 0, soft: 0.55, strong: 1 };
-  const NOTE_DEFAULT = '已自動排除新聞、談話類電台。網頁版只顯示 https 電台；電台有沒有人說話由電台自己決定，播到主持人就換下一台。';
+  const NOTE_DEFAULT = '已自動排除新聞、談話類電台。電台有沒有人說話由電台自己決定，播到主持人就換下一台。';
 
   const soma = (slug, name, tags) => ({
     name: `SomaFM ${name}`, cc: 'US', tags, bitrate: 128, curated: true, urls: [`https://ice.somafm.com/${slug}`],
@@ -179,6 +179,32 @@
     }
     return out;
   }
+  // Favourites that came from a pasted list only have a name and an address: look up country / genre / bitrate once.
+  const metaTried = new Set();
+  async function lookupMeta(url) {
+    for (const base of (await servers()).slice(0, 3)) {
+      try {
+        const r = await fetchT(`${base}/json/stations/byurl?${new URLSearchParams({ url })}`, 8000);
+        if (!r.ok) continue;
+        const d = await r.json(); const m = Array.isArray(d) && d.find((x) => x && typeof x === 'object'); if (!m) return null;
+        const fav = String(m.favicon || '').trim();
+        return { cc: String(m.countrycode || '').toUpperCase(), bitrate: num(m.bitrate), favicon: /^https:\/\//i.test(fav) ? fav : '',
+          tags: String(m.tags || '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 6) };
+      } catch (e) { /* try the next server */ }
+    }
+    return null;
+  }
+  async function enrichFavorites() {
+    const todo = S.favorites.filter((f) => !f.cc && !(f.tags && f.tags.length) && !f.bitrate && !metaTried.has(f.urls[0])).slice(0, 25);
+    let changed = false;
+    for (const f of todo) {
+      metaTried.add(f.urls[0]);
+      const m = await lookupMeta(f.urls[0]); if (!m) continue;
+      if (m.cc) f.cc = m.cc; if (m.tags.length) f.tags = m.tags; if (m.bitrate) f.bitrate = m.bitrate; if (m.favicon && !f.favicon) f.favicon = m.favicon;
+      changed = true;
+    }
+    if (changed) { saveNow(); if (S.view === 'fav' && !$('search').value.trim()) reload(); }
+  }
   function curatedMatches(text, cc, tag) {
     text = text.trim().toLowerCase();
     const inRegion = (s) => !cc || (cc === LATAM_CODE ? LATAM.includes(s.cc) : s.cc === cc);
@@ -208,6 +234,7 @@
     if (st.cc) parts.push(COUNTRY_NAMES[st.cc] || st.cc);
     (st.tags || []).map((t) => GENRE_NAMES[t] || t).slice(0, tagsShown).forEach((t) => parts.push(t));
     if (st.bitrate) parts.push(`${st.bitrate}k`);
+    if (!parts.length && st.urls && st.urls[0]) { try { parts.push(new URL(st.urls[0]).hostname); } catch (e) { /* no host to show */ } }
     return parts.join(' · ');
   };
   function heatText(st) {
@@ -613,7 +640,7 @@
   }
   function openUrl(urls, i, token, st, plain) {
     if (token !== P.token) return;
-    if (i >= urls.length) return fail(token, '無法連線這個電台，請換一台試試');
+    if (i >= urls.length) return fail(token, '無法連線這個電台。可能是電台限制了地區（例如韓國 KBS、MBC、SBS 只開放韓國境內）、網址已失效，或不支援 https。請換一台試試');
     const url = urls[i];
     const isHls = /\.m3u8(\?|$)/i.test(url);
     const a = new Audio(); a.preload = 'auto';
@@ -1077,7 +1104,7 @@
       S.favorites.push(f); have.add(f.urls[0]); added++;
       if (!f.urls.some((u) => /^https:/i.test(u))) http++;
     });
-    saveNow();
+    saveNow(); enrichFavorites().catch(() => {});
     if (S.view === 'fav') reload(); else { markRows(); updateSelectionUi(); }
     return { added, skipped: items.length - added, http };
   }
@@ -1131,13 +1158,24 @@
   function openSettings() {
     const dlg = $('setDlg'); const body = $('setBody'); body.replaceChildren();
     const h2 = document.createElement('h2'); h2.textContent = '設定'; body.append(h2);
-    const hint = (t) => { const p = document.createElement('p'); p.className = 'hint'; p.textContent = t; body.append(p); };
-    const row = (label, el) => { const r = document.createElement('div'); r.className = 'srow'; const s = document.createElement('span'); s.textContent = label; r.append(s, el); body.append(r); };
-    const select = (opts, cur, fn) => { const s = document.createElement('select'); opts.forEach(([t, v]) => s.add(new Option(t, v))); s.value = cur; s.addEventListener('change', () => fn(s.value)); return s; };
-    const check = (text, cur, fn) => { const l = document.createElement('label'); l.className = 'chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.checked = cur; c.addEventListener('change', () => fn(c.checked)); l.append(c, document.createTextNode(text)); body.append(l); };
+    // tabs: each group of settings fits on screen, nothing to scroll down to
+    const bar = document.createElement('div'); bar.className = 'tabs'; bar.setAttribute('role', 'tablist');
+    const panes = document.createElement('div'); panes.className = 'panes'; body.append(bar, panes);
+    const tabBtns = []; const paneEls = [];
+    const addTab = (label) => {
+      const el = document.createElement('div'); el.className = 'pane'; el.hidden = paneEls.length > 0; paneEls.push(el); panes.append(el);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tab' + (paneEls.length === 1 ? ' on' : ''); b.textContent = label; b.setAttribute('role', 'tab');
+      b.addEventListener('click', () => { tabBtns.forEach((t, i) => { t.classList.toggle('on', t === b); paneEls[i].hidden = t !== b; }); panes.scrollTop = 0; });
+      tabBtns.push(b); bar.append(b); return el;
+    };
+    let cur = addTab('外觀');
+    const hint = (t) => { const p = document.createElement('p'); p.className = 'hint'; p.textContent = t; cur.append(p); };
+    const row = (label, el) => { const r = document.createElement('div'); r.className = 'srow'; const s = document.createElement('span'); s.textContent = label; r.append(s, el); cur.append(r); };
+    const select = (opts, val, fn) => { const s = document.createElement('select'); opts.forEach(([t, v]) => s.add(new Option(t, v))); s.value = val; s.addEventListener('change', () => fn(s.value)); return s; };
+    const check = (text, on, fn) => { const l = document.createElement('label'); l.className = 'chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.checked = on; c.addEventListener('change', () => fn(c.checked)); l.append(c, document.createTextNode(text)); cur.append(l); };
 
     row('外觀主題', select(Object.entries(THEMES).map(([k, v]) => [v, k]), S.theme, (v) => { S.theme = v; applyTheme(); saveNow(); }));
-    h2.after(); const h3a = document.createElement('h3'); h3a.textContent = '視覺效果'; body.append(h3a);
+    const h3a = document.createElement('h3'); h3a.textContent = '視覺效果'; cur.append(h3a);
     row('頻譜樣式', select(VIZ_STYLES, S.viz, (v) => { S.viz = v; $('vizWrap').hidden = v === 'off'; saveNow(); }));
     row('背景低音光暈', select([['關閉', 'off'], ['柔和', 'soft'], ['強烈', 'strong']], S.ambient, (v) => { S.ambient = v; saveNow(); }));
     const glow = document.createElement('input'); glow.type = 'range'; glow.min = 0; glow.max = 100; glow.value = S.glow;
@@ -1145,9 +1183,10 @@
     row('光暈強度', glow);
     check('頻譜顏色跟著電台圖示變色（下一次播放生效）', S.coverColor, (v) => { S.coverColor = v; saveNow(); });
     check('啟用頻譜與 EQ（部分電台不開放，會自動改用一般播放）', S.enhanced, (v) => { S.enhanced = v; saveNow(); hint2.textContent = v ? '下一次播放生效。' : '已關閉：EQ 與頻譜不會作用。下一次播放生效。'; });
-    const hint2 = document.createElement('p'); hint2.className = 'hint'; hint2.textContent = '下一次播放生效。'; body.append(hint2);
+    const hint2 = document.createElement('p'); hint2.className = 'hint'; hint2.textContent = '下一次播放生效。'; cur.append(hint2);
 
-    const h3b = document.createElement('h3'); h3b.textContent = '等化器（EQ）'; body.append(h3b);
+    cur = addTab('音效');
+    const h3b = document.createElement('h3'); h3b.textContent = '等化器（EQ）'; cur.append(h3b);
     const presetOpts = Object.entries(EQ_PRESETS).map(([k, [t]]) => [t, k]); presetOpts.push(['自訂', 'custom']);
     const sliders = []; const badges = [];
     const fmt = (v) => (v ? `${v > 0 ? '+' : ''}${v} dB` : '0 dB');
@@ -1163,14 +1202,15 @@
         S.eqCustom = sliders.map((s) => +s.value); S.eq = 'custom'; presetSel.value = 'custom';
         badges.forEach((b, j) => { b.textContent = fmt(S.eqCustom[j]); }); applyEq(); saveSoon();
       });
-      sliders.push(sl); badges.push(bd); r.append(lb, sl, bd); body.append(r);
+      sliders.push(sl); badges.push(bd); r.append(lb, sl, bd); cur.append(r);
     });
     syncSliders();
     hint('EQ 與頻譜只對「允許跨網域讀取」的電台有效。音量超過 100% 同樣只在這類電台有效（iPhone 請用機身音量鍵）。');
-    buildBackupSection(body);
+    cur = addTab('最愛備份');
+    buildBackupSection(cur);
     const hi = document.createElement('p'); hi.className = 'hint';
     hi.textContent = '安裝成 App：Android／電腦 Chrome 按右上角「安裝」；iPhone 用 Safari 按分享 →「加入主畫面」。';
-    body.append(hi);
+    cur.append(hi);
     const btns = document.createElement('div'); btns.className = 'dlg-btns';
     const done = document.createElement('button'); done.className = 'btn primary'; done.textContent = '完成'; done.addEventListener('click', () => dlg.close());
     btns.append(done); body.append(btns);
@@ -1187,7 +1227,7 @@
       if (!/^https?:\/\//i.test(url)) { alert('網址要以 http:// 或 https:// 開頭。'); return; }
       let host = ''; try { host = new URL(url).hostname; } catch (err) { alert('網址格式不正確。'); return; }
       const name = $('addName').value.trim() || host;
-      if (!favKeys().has(url)) { S.favorites.push({ name, urls: [url], cc: '', tags: [], custom: true }); saveNow(); }
+      if (!favKeys().has(url)) { S.favorites.push({ name, urls: [url], cc: '', tags: [], custom: true }); saveNow(); enrichFavorites().catch(() => {}); }
       dlg.close(); setView('fav');
       if (/^http:/i.test(url)) setNote('已加入。這是 http 網址，網頁版會改用 https 嘗試播放；如果該電台不支援 https 就播不出來（桌面版不受影響）。');
     });
@@ -1196,6 +1236,7 @@
   // ---------------------------------------------------------------- boot
   function init() {
     applyTheme(); buildToolbar(); initViz(); initAddDialog(); setNote('');
+    setTimeout(() => { enrichFavorites().catch(() => {}); }, 1500);
     const vol = $('volume'); vol.value = S.volume; $('volBadge').textContent = `${S.volume}%`;
     vol.addEventListener('input', () => { S.volume = +vol.value; $('volBadge').textContent = `${S.volume}%`; applyVolume(); saveSoon(); });
     $('playBtn').addEventListener('click', () => { const st = selectedStation() || P.last; if (st) playStation(st); });

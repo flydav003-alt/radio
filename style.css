@@ -218,3 +218,14 @@ h3 { margin: 6px 0 0; font-size: 13px; color: var(--acc-text); }
 .folder-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
 .folder-list .btn { justify-content: flex-start; text-align: left; }
 .row .mv:last-of-type { margin-right: 0; }
+
+/* settings dialog: tabs + fixed footer */
+#setDlg { height: min(640px, calc(100dvh - 24px)); }
+#setDlg .dlg-body { height: 100%; box-sizing: border-box; overflow: hidden; gap: 10px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { background: var(--raised-a); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tab.on { background: var(--sel); color: var(--strong); border-color: var(--sel-line); }
+.panes { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; scrollbar-color: var(--scroll) transparent; scrollbar-width: thin; }
+.pane { display: flex; flex-direction: column; gap: 10px; }
+.pane[hidden] { display: none; }
+#setDlg .dlg-btns { flex: none; padding-top: 4px; border-top: 1px solid var(--line); }

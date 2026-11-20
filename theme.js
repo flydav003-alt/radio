@@ -22,15 +22,15 @@
     aurora: { label: '極光夜空', bh: 190, bs: 0.30, ah: 165, lum: 0.085, glass: 176,
       base: ['#070d14', '#0b1722', '#050a10'], decos: [['aurora', '#3ddc97']],
       orbs: [[0.15, 0.00, 0.60, '#22d3a6', 60], [0.92, 0.12, 0.55, '#8b5cf6', 66], [0.50, 1.05, 0.60, '#0ea5e9', 36]] },
-    graphite: { label: '石墨古銅', bh: 30, bs: 0.03, ah: 34, lum: 0.085, glass: 186,
-      base: ['#131415', '#18191b', '#0b0c0d'], decos: [['graphite', '#d9a066']],
-      orbs: [[0.22, -0.12, 0.72, '#ffffff', 24], [0.92, 1.00, 0.50, '#c98a4b', 34]] },
-    forest: { label: '霧鎖山林', bh: 160, bs: 0.22, ah: 148, lum: 0.08, glass: 180,
-      base: ['#0a1411', '#0f1e19', '#060d0b'], decos: [['forest', '#5fae93']],
-      orbs: [[0.80, 0.06, 0.50, '#cfe9d8', 34], [0.08, 1.00, 0.60, '#2f8f6b', 40]] },
     dune: { label: '暮光沙丘', bh: 15, bs: 0.25, ah: 28, lum: 0.085, glass: 182,
       base: ['#1a0f14', '#2a1620', '#0e070a'], decos: [['dune', '#ff9a5c']],
       orbs: [[0.72, 0.58, 0.55, '#ff8a4c', 76], [0.08, 0.00, 0.62, '#7a3a6e', 60], [0.96, 1.00, 0.50, '#c2410c', 30]] },
+    slate: { label: '霧灰藍（中性）', bh: 215, bs: 0.10, ah: 205, lum: 0.19, glass: 190,
+      base: ['#2b3039', '#323844', '#252a33'], decos: [['mist', '#ffffff']], vignette: 70,
+      orbs: [[0.15, 0.00, 0.65, '#8aa4c8', 50], [0.95, 1.00, 0.55, '#b7a8c9', 34]] },
+    greige: { label: '暖沙灰（中性）', light: true, bh: 36, bs: 0.10, ah: 16, lum: 0.9, dim: 0.13, glass: 226,
+      base: ['#dad4c9', '#d3ccc0', '#cac2b4'], decos: [['mist', '#5d5240']], vignette: 40, vcolor: '#7a6a50', grain: 9,
+      orbs: [[0.0, 0.0, 0.80, '#efe9dd', 150], [1.0, 1.0, 0.70, '#bfb4a0', 110]] },
     washi: { label: '和紙藍染（淺色）', light: true, bh: 38, bs: 0.45, ah: 205, lum: 0.9, glass: 232,
       base: ['#fbf6ea', '#f8f1e1', '#f4ebd7'], decos: [['washi', '#8b6f47']], vignette: 46, vcolor: '#b99a62', grain: 7,
       orbs: [[0.0, 0.0, 0.80, '#fff9e8', 190], [1.0, 0.0, 0.70, '#eee0c2', 170], [0.60, 1.08, 0.65, '#e7d8b8', 150]] },
@@ -69,12 +69,12 @@
     });
     return d;
   }
-  function lightPalette(bh, bs, ah) {
+  function lightPalette(bh, bs, ah, dim = 0) {
     const dl = (ah >= 65 && ah <= 205) ? -0.10 : 0;
     const d = {
-      BASE: hsl(bh, bs, 0.955), PANEL: hsl(bh, bs * 0.4, 0.997), RAISED: hsl(bh, bs * 0.9, 0.945), RAISED_HI: hsl(bh, bs * 0.95, 0.905),
-      LINE: hsl(bh, bs * 0.6, 0.895), LINE_HI: hsl(bh, bs * 0.55, 0.815),
-      SEL: hsl(bh, Math.max(0.55, bs), 0.885), SEL_LINE: hsl(bh, Math.max(0.45, bs * 0.8), 0.72),
+      BASE: hsl(bh, bs, 0.955 - dim), PANEL: hsl(bh, bs * 0.4, 0.997 - dim), RAISED: hsl(bh, bs * 0.9, 0.945 - dim), RAISED_HI: hsl(bh, bs * 0.95, 0.905 - dim),
+      LINE: hsl(bh, bs * 0.6, 0.895 - dim), LINE_HI: hsl(bh, bs * 0.55, 0.815 - dim),
+      SEL: hsl(bh, Math.max(0.55, bs), 0.885 - dim), SEL_LINE: hsl(bh, Math.max(0.45, bs * 0.8), 0.72),
       FOCUS: hsl(ah, 0.62, 0.56), FOCUS_HI: hsl(ah, 0.66, 0.46),
       TEXT: hsl(bh, 0.32, 0.15), TEXT2: hsl(bh, 0.26, 0.23), MUTED: hsl(bh, 0.16, 0.38),
       FAINT: hsl(bh, 0.13, 0.46), DISABLED: hsl(bh, 0.10, 0.64),
@@ -93,7 +93,7 @@
   }
   function paletteFor(key) {
     const t = THEMES[key] || THEMES.tokyo;
-    const d = t.light ? lightPalette(t.bh, t.bs, t.ah) : darkPalette(t.bh, t.bs, t.ah, t.lum);
+    const d = t.light ? lightPalette(t.bh, t.bs, t.ah, t.dim || 0) : darkPalette(t.bh, t.bs, t.ah, t.lum);
     const g = t.glass;
     d.PANEL_S = d.PANEL; d.RAISED_S = d.RAISED;
     d.PANEL_A = rgba(d.PANEL, g); d.BASE_A = rgba(d.BASE, Math.min(255, g + 30));
@@ -231,44 +231,15 @@
     const g = x.createLinearGradient(0, H * 0.78, 0, H); g.addColorStop(0, qc('#02060a', 0)); g.addColorStop(1, qc('#02060a', 150));
     x.fillStyle = g; x.fillRect(0, H * 0.78, W, H * 0.22);
   }
-  function decoGraphite(x, W, H, col) {
-    const rng = mulberry(9);
-    [[W * 0.06, 300, 20], [W * 0.30, 190, 14]].forEach(([x0, w, a]) => {
+  function decoMist(x, W, H, col) {
+    [[W * 0.02, 520, 18], [W * 0.34, 380, 13], [W * 0.64, 460, 16]].forEach(([x0, w, a]) => {
       const g = x.createLinearGradient(x0, 0, x0 + w, 0);
-      g.addColorStop(0, qc('#ffffff', 0)); g.addColorStop(0.5, qc('#ffffff', a)); g.addColorStop(1, qc('#ffffff', 0));
-      x.fillStyle = g; x.beginPath(); x.moveTo(x0 + w * 0.3, 0); x.lineTo(x0 + w * 1.3, 0); x.lineTo(x0 + w * 2.6, H); x.lineTo(x0 + w * 1.0, H); x.closePath(); x.fill();
+      g.addColorStop(0, qc(col, 0)); g.addColorStop(0.5, qc(col, a)); g.addColorStop(1, qc(col, 0));
+      x.fillStyle = g; x.beginPath(); x.moveTo(x0 + w * 0.5, 0); x.lineTo(x0 + w * 1.5, 0); x.lineTo(x0 + w * 0.9, H); x.lineTo(x0 - w * 0.1, H); x.closePath(); x.fill();
     });
-    for (let i = 0; i < 520; i++) {
-      const py = rng.uniform(0, H); const px = rng.uniform(-100, W); const c = rng() < 0.55 ? '#ffffff' : '#000000';
-      x.strokeStyle = qc(c, rng.uniform(5, 17)); x.lineWidth = rng.pick([0.6, 0.8, 1.2]);
-      x.beginPath(); x.moveTo(px, py); x.lineTo(px + rng.uniform(160, 800), py + rng.uniform(-1.5, 1.5)); x.stroke();
-    }
-    for (let i = 0; i < 9; i++) { x.strokeStyle = qc(col, 38 - i * 3); x.lineWidth = 1.4; x.beginPath(); x.arc(W * 0.90, H * 1.06, 250 + i * 62, 0, 6.2832); x.stroke(); }
-    x.strokeStyle = qc(col, 70); x.lineWidth = 2; x.beginPath(); x.arc(W * 0.90, H * 1.06, 232, 0, 6.2832); x.stroke();
-  }
-  function ridgePath(x, W, H, y0, a, b, c, ph) {
-    x.beginPath(); x.moveTo(0, H);
-    for (let px = 0; px <= W + 8; px += 8) {
-      x.lineTo(px, y0 - a * Math.abs(Math.sin(px * 0.0040 + ph)) - b * Math.abs(Math.sin(px * 0.0115 + ph * 1.7)) + c * Math.sin(px * 0.031 + ph * 2.3));
-    }
-    x.lineTo(W, H); x.closePath();
-  }
-  function decoForest(x, W, H, col) {
-    for (let i = 0; i < 5; i++) {
-      const y0 = H * (0.50 + 0.105 * i);
-      const g = x.createLinearGradient(0, y0 - 90, 0, y0 + 260);
-      g.addColorStop(0, qc(i < 2 ? '#7fc4ac' : col, 34 + i * 22)); g.addColorStop(1, qc('#07120e', 90 + i * 28));
-      x.fillStyle = g; ridgePath(x, W, H, y0, 70 + i * 12, 26, 5, i * 1.9 + 0.6); x.fill();
-      const f = x.createLinearGradient(0, y0 - 30, 0, y0 + 150);
-      f.addColorStop(0, qc('#bfe6d6', 0)); f.addColorStop(0.35, qc('#bfe6d6', 20 - i * 2)); f.addColorStop(1, qc('#bfe6d6', 0));
-      x.fillStyle = f; x.fillRect(0, y0 - 30, W, 180);
-    }
-    const rng = mulberry(14);
-    for (let i = 0; i < 18; i++) {
-      const px = rng.uniform(0, W); const py = rng.uniform(H * 0.52, H * 0.92);
-      const g = x.createRadialGradient(px, py, 0, px, py, 9); g.addColorStop(0, qc('#e8ffb0', 120)); g.addColorStop(1, qc('#e8ffb0', 0));
-      x.fillStyle = g; dot(x, px, py, 9);
-    }
+    x.fillStyle = qc(col, 26);
+    for (let gy = 36; gy < H; gy += 44) for (let gx = 36; gx < W; gx += 44) dot(x, gx, gy, 1.1);
+    for (let i = 0; i < 5; i++) { x.strokeStyle = qc(col, 30 - i * 4); x.lineWidth = 1.3; x.beginPath(); x.arc(W * 0.96, H * 1.02, 220 + i * 70, 0, 6.2832); x.stroke(); }
   }
   function decoDune(x, W, H, col) {
     const sx = W * 0.72; const sy = H * 0.60;
@@ -312,7 +283,7 @@
       x.fillStyle = g; x.fillRect(0, py - 60, W, 120);
     });
   }
-  const DECOS = { aurora: decoAurora, graphite: decoGraphite, forest: decoForest, dune: decoDune, washi: decoWashi, waves: decoWaves, bokeh: decoBokeh, petals: decoPetals, marble: decoMarble, torii: decoTorii };
+  const DECOS = { aurora: decoAurora, mist: decoMist, dune: decoDune, washi: decoWashi, waves: decoWaves, bokeh: decoBokeh, petals: decoPetals, marble: decoMarble, torii: decoTorii };
 
   function grain(x, W, H, strength) {
     const tile = document.createElement('canvas'); tile.width = tile.height = 256;
