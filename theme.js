@@ -19,6 +19,21 @@
     rosewater: { label: '玫瑰（淺色）', light: true, bh: 338, bs: 0.45, ah: 338, lum: 0.9, glass: 232,
       base: ['#fcf5f7', '#fbf3f6', '#fbf3f6'], vignette: 0, grain: 0, decos: [],
       orbs: [[0.0, 0.0, 0.80, '#f8dde7', 190], [1.0, 0.0, 0.72, '#fbe9d8', 190], [0.62, 1.08, 0.66, '#ece0f6', 190]] },
+    aurora: { label: '極光夜空', bh: 190, bs: 0.30, ah: 165, lum: 0.085, glass: 176,
+      base: ['#070d14', '#0b1722', '#050a10'], decos: [['aurora', '#3ddc97']],
+      orbs: [[0.15, 0.00, 0.60, '#22d3a6', 60], [0.92, 0.12, 0.55, '#8b5cf6', 66], [0.50, 1.05, 0.60, '#0ea5e9', 36]] },
+    graphite: { label: '石墨古銅', bh: 30, bs: 0.03, ah: 34, lum: 0.085, glass: 186,
+      base: ['#131415', '#18191b', '#0b0c0d'], decos: [['graphite', '#d9a066']],
+      orbs: [[0.22, -0.12, 0.72, '#ffffff', 24], [0.92, 1.00, 0.50, '#c98a4b', 34]] },
+    forest: { label: '霧鎖山林', bh: 160, bs: 0.22, ah: 148, lum: 0.08, glass: 180,
+      base: ['#0a1411', '#0f1e19', '#060d0b'], decos: [['forest', '#5fae93']],
+      orbs: [[0.80, 0.06, 0.50, '#cfe9d8', 34], [0.08, 1.00, 0.60, '#2f8f6b', 40]] },
+    dune: { label: '暮光沙丘', bh: 15, bs: 0.25, ah: 28, lum: 0.085, glass: 182,
+      base: ['#1a0f14', '#2a1620', '#0e070a'], decos: [['dune', '#ff9a5c']],
+      orbs: [[0.72, 0.58, 0.55, '#ff8a4c', 76], [0.08, 0.00, 0.62, '#7a3a6e', 60], [0.96, 1.00, 0.50, '#c2410c', 30]] },
+    washi: { label: '和紙藍染（淺色）', light: true, bh: 38, bs: 0.45, ah: 205, lum: 0.9, glass: 232,
+      base: ['#fbf6ea', '#f8f1e1', '#f4ebd7'], decos: [['washi', '#8b6f47']], vignette: 46, vcolor: '#b99a62', grain: 7,
+      orbs: [[0.0, 0.0, 0.80, '#fff9e8', 190], [1.0, 0.0, 0.70, '#eee0c2', 170], [0.60, 1.08, 0.65, '#e7d8b8', 150]] },
   };
 
   function hsl(h, s, l) {
@@ -195,7 +210,109 @@
       }
     }
   }
-  const DECOS = { waves: decoWaves, bokeh: decoBokeh, petals: decoPetals, marble: decoMarble, torii: decoTorii };
+  const dot = (x, px, py, r) => { x.beginPath(); x.arc(px, py, r, 0, 6.2832); x.fill(); };
+  function decoAurora(x, W, H, col) {
+    const rng = mulberry(5);
+    for (let i = 0; i < 170; i++) {
+      const px = rng.uniform(0, W); const py = rng.uniform(0, H * 0.78); const r = rng.pick([0.8, 0.8, 1.0, 1.2, 1.6]);
+      x.fillStyle = qc('#ffffff', rng.uniform(40, 150)); dot(x, px, py, r);
+    }
+    [col, '#8b5cf6', '#4fd1ff'].forEach((c, b) => {
+      for (let px = 0; px <= W + 4; px += 4) {
+        const y = H * (0.30 + 0.12 * b) + 80 * Math.sin(px / 240 + b * 1.7) + 36 * Math.sin(px / 97 + b) + px * (0.10 - 0.06 * b);
+        const h = 190 + 110 * Math.sin(px / 330 + b * 2.1) + 45 * Math.sin(px / 61 + b * 3);
+        const ray = 0.62 + 0.38 * Math.sin(px / 5.3 + b) * Math.sin(px / 17 + b * 2);
+        const a = (0.5 + 0.5 * Math.sin(px / 150 + b * 2.4)) * ray * (92 - b * 16);
+        const g = x.createLinearGradient(0, y - h, 0, y + 46);
+        g.addColorStop(0, qc(c, 0)); g.addColorStop(0.68, qc(c, a)); g.addColorStop(0.80, qc(c, Math.min(255, a * 1.25))); g.addColorStop(1, qc(c, 0));
+        x.fillStyle = g; x.fillRect(px, y - h, 4, h + 46);
+      }
+    });
+    const g = x.createLinearGradient(0, H * 0.78, 0, H); g.addColorStop(0, qc('#02060a', 0)); g.addColorStop(1, qc('#02060a', 150));
+    x.fillStyle = g; x.fillRect(0, H * 0.78, W, H * 0.22);
+  }
+  function decoGraphite(x, W, H, col) {
+    const rng = mulberry(9);
+    [[W * 0.06, 300, 20], [W * 0.30, 190, 14]].forEach(([x0, w, a]) => {
+      const g = x.createLinearGradient(x0, 0, x0 + w, 0);
+      g.addColorStop(0, qc('#ffffff', 0)); g.addColorStop(0.5, qc('#ffffff', a)); g.addColorStop(1, qc('#ffffff', 0));
+      x.fillStyle = g; x.beginPath(); x.moveTo(x0 + w * 0.3, 0); x.lineTo(x0 + w * 1.3, 0); x.lineTo(x0 + w * 2.6, H); x.lineTo(x0 + w * 1.0, H); x.closePath(); x.fill();
+    });
+    for (let i = 0; i < 520; i++) {
+      const py = rng.uniform(0, H); const px = rng.uniform(-100, W); const c = rng() < 0.55 ? '#ffffff' : '#000000';
+      x.strokeStyle = qc(c, rng.uniform(5, 17)); x.lineWidth = rng.pick([0.6, 0.8, 1.2]);
+      x.beginPath(); x.moveTo(px, py); x.lineTo(px + rng.uniform(160, 800), py + rng.uniform(-1.5, 1.5)); x.stroke();
+    }
+    for (let i = 0; i < 9; i++) { x.strokeStyle = qc(col, 38 - i * 3); x.lineWidth = 1.4; x.beginPath(); x.arc(W * 0.90, H * 1.06, 250 + i * 62, 0, 6.2832); x.stroke(); }
+    x.strokeStyle = qc(col, 70); x.lineWidth = 2; x.beginPath(); x.arc(W * 0.90, H * 1.06, 232, 0, 6.2832); x.stroke();
+  }
+  function ridgePath(x, W, H, y0, a, b, c, ph) {
+    x.beginPath(); x.moveTo(0, H);
+    for (let px = 0; px <= W + 8; px += 8) {
+      x.lineTo(px, y0 - a * Math.abs(Math.sin(px * 0.0040 + ph)) - b * Math.abs(Math.sin(px * 0.0115 + ph * 1.7)) + c * Math.sin(px * 0.031 + ph * 2.3));
+    }
+    x.lineTo(W, H); x.closePath();
+  }
+  function decoForest(x, W, H, col) {
+    for (let i = 0; i < 5; i++) {
+      const y0 = H * (0.50 + 0.105 * i);
+      const g = x.createLinearGradient(0, y0 - 90, 0, y0 + 260);
+      g.addColorStop(0, qc(i < 2 ? '#7fc4ac' : col, 34 + i * 22)); g.addColorStop(1, qc('#07120e', 90 + i * 28));
+      x.fillStyle = g; ridgePath(x, W, H, y0, 70 + i * 12, 26, 5, i * 1.9 + 0.6); x.fill();
+      const f = x.createLinearGradient(0, y0 - 30, 0, y0 + 150);
+      f.addColorStop(0, qc('#bfe6d6', 0)); f.addColorStop(0.35, qc('#bfe6d6', 20 - i * 2)); f.addColorStop(1, qc('#bfe6d6', 0));
+      x.fillStyle = f; x.fillRect(0, y0 - 30, W, 180);
+    }
+    const rng = mulberry(14);
+    for (let i = 0; i < 18; i++) {
+      const px = rng.uniform(0, W); const py = rng.uniform(H * 0.52, H * 0.92);
+      const g = x.createRadialGradient(px, py, 0, px, py, 9); g.addColorStop(0, qc('#e8ffb0', 120)); g.addColorStop(1, qc('#e8ffb0', 0));
+      x.fillStyle = g; dot(x, px, py, 9);
+    }
+  }
+  function decoDune(x, W, H, col) {
+    const sx = W * 0.72; const sy = H * 0.60;
+    const sg = x.createRadialGradient(sx, sy, 0, sx, sy, 150);
+    sg.addColorStop(0, qc('#ffe2b0', 230)); sg.addColorStop(0.55, qc(col, 120)); sg.addColorStop(1, qc(col, 0));
+    x.fillStyle = sg; dot(x, sx, sy, 150);
+    for (let i = 0; i < 4; i++) {
+      const y0 = H * (0.68 + 0.085 * i); const pts = [];
+      x.beginPath(); x.moveTo(0, H);
+      for (let px = 0; px <= W + 8; px += 8) {
+        const y = y0 + 38 * Math.sin(px / (330 - i * 40) + i * 1.6) + 16 * Math.sin(px / 120 + i * 2.7);
+        pts.push([px, y]); x.lineTo(px, y);
+      }
+      x.lineTo(W, H); x.closePath();
+      const g = x.createLinearGradient(0, y0 - 40, 0, y0 + 240);
+      g.addColorStop(0, qc(i < 2 ? '#6b2b55' : '#3a1530', 120 + i * 30)); g.addColorStop(1, qc('#0b0509', 210));
+      x.fillStyle = g; x.fill();
+      x.strokeStyle = qc(col, 58 - i * 10); x.lineWidth = 1.4; x.beginPath();
+      pts.forEach(([px, py], k) => { if (k === 0) x.moveTo(px, py); else x.lineTo(px, py); }); x.stroke();
+    }
+  }
+  function decoWashi(x, W, H, col) {
+    const rng = mulberry(33);
+    for (let i = 0; i < 9; i++) {
+      const px = rng.uniform(0, W); const py = rng.uniform(0, H); const r = rng.uniform(180, 420);
+      const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, qc(col, rng.uniform(7, 16))); g.addColorStop(1, qc(col, 0));
+      x.fillStyle = g; dot(x, px, py, r);
+    }
+    for (let i = 0; i < 760; i++) {
+      const px = rng.uniform(0, W); const py = rng.uniform(0, H); const ang = rng.uniform(0, 6.283); const ln = rng.uniform(14, 70); const bend = rng.uniform(-0.9, 0.9);
+      x.strokeStyle = qc(rng() < 0.8 ? col : '#ffffff', rng.uniform(10, 34)); x.lineWidth = rng.pick([0.6, 0.8, 1.0]);
+      x.beginPath(); x.moveTo(px, py);
+      x.quadraticCurveTo(px + Math.cos(ang + bend) * ln * 0.5, py + Math.sin(ang + bend) * ln * 0.5, px + Math.cos(ang) * ln, py + Math.sin(ang) * ln); x.stroke();
+    }
+    [[W * 0.86, H * 0.26, 330, 20], [W * 0.10, H * 0.96, 280, 16], [W * 0.50, H * 0.52, 240, 7]].forEach(([px, py, r, a]) => {
+      const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, qc('#3a6aa8', a)); g.addColorStop(1, qc('#3a6aa8', 0));
+      x.fillStyle = g; dot(x, px, py, r);
+    });
+    [[H * 0.38, 46], [H * 0.72, 38]].forEach(([py, a]) => {
+      const g = x.createLinearGradient(0, py - 60, 0, py + 60); g.addColorStop(0, qc('#ffffff', 0)); g.addColorStop(0.5, qc('#ffffff', a)); g.addColorStop(1, qc('#ffffff', 0));
+      x.fillStyle = g; x.fillRect(0, py - 60, W, 120);
+    });
+  }
+  const DECOS = { aurora: decoAurora, graphite: decoGraphite, forest: decoForest, dune: decoDune, washi: decoWashi, waves: decoWaves, bokeh: decoBokeh, petals: decoPetals, marble: decoMarble, torii: decoTorii };
 
   function grain(x, W, H, strength) {
     const tile = document.createElement('canvas'); tile.width = tile.height = 256;
@@ -219,7 +336,7 @@
     if (gr) grain(x, W, H, gr);
     const vg = spec.vignette === undefined ? 120 : spec.vignette;
     const v = x.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.72);
-    v.addColorStop(0.5, qc('#000000', 0)); v.addColorStop(1, qc('#000000', vg));
+    v.addColorStop(0.5, qc(spec.vcolor || '#000000', 0)); v.addColorStop(1, qc(spec.vcolor || '#000000', vg));
     x.fillStyle = v; x.fillRect(0, 0, W, H);
   }
 

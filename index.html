@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RadioDeck">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
@@ -39,6 +39,7 @@
           <button id="segAll" class="segbtn left on">電台</button><button id="segFav" class="segbtn right">★ 最愛</button>
         </div>
         <button id="rankBtn" class="btn" title="依 24 小時熱門排序、類型不限；搭配國家就是該國排行榜">🔥 排行榜</button>
+        <button id="folderBtn" class="btn" title="在最愛清單裡建立資料夾" hidden>📁<span class="lbl"> 新增資料夾</span></button>
         <input id="search" type="search" placeholder="🔍 輸入電台名稱，按 Enter 搜尋…" enterkeyhint="search" autocomplete="off">
         <select id="country" aria-label="國家"></select>
         <select id="sort" aria-label="排序"></select>
@@ -108,11 +109,19 @@
   </form>
 </dialog>
 
+<dialog id="folderDlg">
+  <div class="dlg-body">
+    <h2>移到資料夾</h2>
+    <div id="folderList" class="folder-list"></div>
+    <div class="dlg-btns"><button type="button" class="btn" id="folderCancel">取消</button></div>
+  </div>
+</dialog>
+
 <dialog id="setDlg">
   <div class="dlg-body" id="setBody"></div>
 </dialog>
 
-<script src="theme.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="theme.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

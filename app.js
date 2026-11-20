@@ -33,7 +33,8 @@
     bright: ['明亮高音', [-1, 0, 0, 0, 2, 4, 5]],
     night: ['夜間模式（柔和低音／高音）', [-6, -4, -1, 0, -1, -3, -5]],
   };
-  const THEMES = { obsidian: '黑曜鎏金', tokyo: '東京夜雨', rose: '玫瑰松林', torii: '京都鳥居', rosewater: '玫瑰（淺色）' };
+  const THEMES = { obsidian: '黑曜鎏金', tokyo: '東京夜雨', rose: '玫瑰松林', torii: '京都鳥居', rosewater: '玫瑰（淺色）',
+    aurora: '極光夜空', graphite: '石墨古銅', forest: '霧鎖山林', dune: '暮光沙丘', washi: '和紙藍染（淺色）' };
   const VIZ_STYLES = [['長條', 'bars'], ['鏡像', 'mirror'], ['波形', 'wave'], ['圓環', 'circle'], ['關閉', 'off']];
   const AMBIENT = { off: 0, soft: 0.55, strong: 1 };
   const NOTE_DEFAULT = '已自動排除新聞、談話類電台。網頁版只顯示 https 電台；電台有沒有人說話由電台自己決定，播到主持人就換下一台。';
@@ -64,8 +65,9 @@
   const DEFAULTS = {
     theme: 'tokyo', volume: 85, country: '', genre: 'ambient', view: 'all', sort: 'clicks',
     eq: 'flat', eqCustom: [0, 0, 0, 0, 0, 0, 0], viz: 'bars', ambient: 'soft', glow: 60,
-    enhanced: true, coverColor: true, favorites: [],
+    enhanced: true, coverColor: true, favorites: [], folders: [], collapsed: [],
   };
+  const UNFILED = '未分類';
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function loadSettings() {
     let d = {};
@@ -85,6 +87,10 @@
     s.glow = clamp(Math.round(+s.glow) || 0, 0, 100);
     s.enhanced = !!s.enhanced; s.coverColor = !!s.coverColor;
     s.favorites = (Array.isArray(s.favorites) ? s.favorites : []).filter((f) => f && Array.isArray(f.urls) && f.urls.length);
+    const fo = (Array.isArray(s.folders) ? s.folders : []).filter((f) => typeof f === 'string').map((f) => f.trim().slice(0, 40));
+    s.favorites.forEach((f) => { const n = String(f.folder || '').trim().slice(0, 40); if (n && n !== UNFILED) { f.folder = n; fo.push(n); } else delete f.folder; });
+    s.folders = [...new Set(fo.filter((f) => f && f !== UNFILED))];
+    s.collapsed = (Array.isArray(s.collapsed) ? s.collapsed : []).filter((f) => f === '' || s.folders.includes(f));
     return s;
   }
   let S = loadSettings();
@@ -216,38 +222,54 @@
     noteEl.textContent = text || NOTE_DEFAULT;
     noteEl.classList.toggle('warn', !!warn);
   }
-  function renderList(stations, message, canReorder) {
-    items = stations.filter((s) => s.urls && s.urls.length);
+  function makeRow(st, i, width, favs, canMove) {
+    const k = keyOf(st);
+    const li = document.createElement('li');
+    li.className = 'row' + (k === selKey ? ' sel' : '') + (isPlayingKey(k) ? ' playing' : '');
+    li.dataset.i = String(i);
+    if (reorderable) li.draggable = true;
+    const n = document.createElement('div'); n.className = 'num'; n.textContent = isPlayingKey(k) ? '♪' : String(i + 1).padStart(width, '0');
+    const star = document.createElement('button'); star.className = 'star' + (favs.has(k) ? ' on' : ''); star.dataset.act = 'fav';
+    star.textContent = favs.has(k) ? '★' : '☆'; star.setAttribute('aria-label', '最愛');
+    const name = document.createElement('div'); name.className = 'name ell';
+    const b = document.createElement('b'); b.className = 'ell'; b.textContent = st.name;
+    const sm = document.createElement('small'); sm.className = 'ell'; sm.textContent = stationSub(st, 1);
+    name.append(b, sm);
+    const tail = document.createElement('div'); tail.className = 'tail';
+    const heat = heatText(st);
+    if (heat) tail.append(document.createTextNode(heat));
+    if (reorderable) {
+      const mk = (act, label, aria) => { const x = document.createElement('button'); x.className = 'mv'; x.dataset.act = act; x.textContent = label; x.setAttribute('aria-label', aria); return x; };
+      tail.append(mk('folder', '📁', '移到資料夾'), mk('up', '▲', '上移'), mk('down', '▼', '下移'));
+    }
+    li.append(n, star, name, tail);
+    return li;
+  }
+  function makeHead(g) {
+    const li = document.createElement('li'); li.className = 'fhead'; li.dataset.folder = g.name;
+    const mk = (cls, text) => { const x = document.createElement('span'); x.className = cls; x.textContent = text; return x; };
+    const tools = document.createElement('span'); tools.className = 'ftools';
+    if (g.name) {
+      [['frename', '✎', '重新命名'], ['fup', '▲', '上移'], ['fdown', '▼', '下移'], ['fdel', '🗑', '刪除資料夾']].forEach(([act, label, aria]) => {
+        const x = document.createElement('button'); x.className = 'mv'; x.dataset.act = act; x.textContent = label; x.title = aria; x.setAttribute('aria-label', aria); tools.append(x);
+      });
+    }
+    li.append(mk('chev', g.collapsed ? '▸' : '▾'), mk('fname', `${g.name ? '📁' : '🗂'}  ${g.name || UNFILED}`), tools, mk('fcount', String(g.count)));
+    return li;
+  }
+  // groups = [{name, count, collapsed, stations}] when the favourites have folders
+  function renderList(stations, message, canReorder, groups) {
     reorderable = !!canReorder;
+    items = groups ? groups.flatMap((g) => (g.collapsed ? [] : g.stations)) : stations.filter((s) => s.urls && s.urls.length);
     const favs = favKeys();
     const frag = document.createDocumentFragment();
     const width = Math.max(2, String(items.length).length);
-    items.forEach((st, i) => {
-      const k = keyOf(st);
-      const li = document.createElement('li');
-      li.className = 'row' + (k === selKey ? ' sel' : '') + (isPlayingKey(k) ? ' playing' : '');
-      li.dataset.i = String(i);
-      const n = document.createElement('div'); n.className = 'num'; n.textContent = isPlayingKey(k) ? '♪' : String(i + 1).padStart(width, '0');
-      const star = document.createElement('button'); star.className = 'star' + (favs.has(k) ? ' on' : ''); star.dataset.act = 'fav';
-      star.textContent = favs.has(k) ? '★' : '☆'; star.setAttribute('aria-label', '最愛');
-      const name = document.createElement('div'); name.className = 'name ell';
-      const b = document.createElement('b'); b.className = 'ell'; b.textContent = st.name;
-      const sm = document.createElement('small'); sm.className = 'ell'; sm.textContent = stationSub(st, 1);
-      name.append(b, sm);
-      const tail = document.createElement('div'); tail.className = 'tail';
-      const heat = heatText(st);
-      if (heat) tail.append(document.createTextNode(heat));
-      if (reorderable) {
-        const up = document.createElement('button'); up.className = 'mv'; up.dataset.act = 'up'; up.textContent = '▲'; up.setAttribute('aria-label', '上移');
-        const dn = document.createElement('button'); dn.className = 'mv'; dn.dataset.act = 'down'; dn.textContent = '▼'; dn.setAttribute('aria-label', '下移');
-        tail.append(up, dn);
-      }
-      li.append(n, star, name, tail);
-      frag.append(li);
-    });
+    let i = 0;
+    if (groups) groups.forEach((g) => { frag.append(makeHead(g)); if (!g.collapsed) g.stations.forEach((st) => frag.append(makeRow(st, i++, width, favs))); });
+    else items.forEach((st, n) => frag.append(makeRow(st, n, width, favs)));
     listEl.replaceChildren(frag);
     emptyEl.textContent = message || '';
-    emptyEl.hidden = items.length > 0;
+    emptyEl.hidden = items.length > 0 || !!groups;
     if (items.length && !items.some((s) => keyOf(s) === selKey)) selKey = keyOf(items[0]);
     markRows();
     updateSelectionUi();
@@ -277,7 +299,14 @@
     if (S.view === 'fav') {
       let favs = S.favorites.filter((f) => f.urls && f.urls.length);
       if (text) favs = favs.filter((f) => String(f.name || '').toLowerCase().includes(text.toLowerCase()));
-      renderList(favs, text ? '沒有符合的最愛電台。' : '還沒有最愛的電台。\n\n在「電台」清單按一下列表左邊的 ☆，或用右上角「新增電台網址」加入。', !text);
+      let groups = null;
+      if (S.folders.length) {
+        groups = ['', ...S.folders].map((name) => {
+          const stations = favs.filter((f) => (f.folder || '') === name);
+          return { name, count: stations.length, stations, collapsed: !text && S.collapsed.includes(name) };
+        }).filter((g) => !text || g.stations.length);
+      }
+      renderList(favs, text ? '沒有符合的最愛電台。' : '還沒有最愛的電台。\n\n在「電台」清單按一下列表左邊的 ☆，或用右上角「新增電台網址」加入。', !text, groups);
       return;
     }
     items = []; listEl.replaceChildren(); emptyEl.hidden = false; emptyEl.textContent = '搜尋電台中…';
@@ -298,19 +327,111 @@
     saveNow();
     if (S.view === 'fav') reload(); else { markRows(); updateSelectionUi(); }
   }
-  function moveFav(i, d) {
-    const j = i + d;
-    if (!reorderable || j < 0 || j >= items.length) return;
-    const keys = items.map(keyOf);
-    [keys[i], keys[j]] = [keys[j], keys[i]];
-    const byKey = new Map(S.favorites.map((f) => [f.urls[0], f]));
-    const moved = keys.map((k) => byKey.get(k)).filter(Boolean);
-    const rest = S.favorites.filter((f) => !keys.includes(f.urls[0]));
-    S.favorites = [...moved, ...rest]; saveNow();
-    selKey = keys[j];
-    renderList(moved, '', true);
+  // ---- favourite order + folders. The list on screen is a sequence of entries (folder headers and stations);
+  // wherever a station ends up in that sequence decides its position and folder.
+  function currentEntries() {
+    return [...listEl.children].map((li) => (li.classList.contains('fhead') ? { h: li.dataset.folder } : { k: keyOf(items[+li.dataset.i]) }));
   }
+  function applyEntries(entries, keys) {
+    const byKey = new Map(S.favorites.map((f) => [f.urls[0], f]));
+    const shown = new Set(entries.filter((e) => e.k).map((e) => e.k));
+    const hidden = new Map();
+    S.favorites.forEach((f) => { if (!shown.has(f.urls[0])) { const n = f.folder || ''; if (!hidden.has(n)) hidden.set(n, []); hidden.get(n).push(f); } });
+    const sections = [['', []]];
+    entries.forEach((e) => {
+      if ('h' in e) { if (e.h === '' && sections.length === 1 && !sections[0][1].length) return; sections.push([e.h, []]); } else sections[sections.length - 1][1].push(e.k);
+    });
+    const ordered = [];
+    sections.forEach(([name, members]) => {
+      members.forEach((k) => { const f = byKey.get(k); if (!f) return; if (name) f.folder = name; else delete f.folder; ordered.push(f); });
+      (hidden.get(name) || []).forEach((f) => ordered.push(f)); hidden.delete(name);
+    });
+    hidden.forEach((list) => list.forEach((f) => ordered.push(f)));
+    S.favorites = ordered;
+    const landed = (sections.find(([, m]) => keys && m.includes(keys[0])) || [''])[0];
+    S.collapsed = S.collapsed.filter((n) => n !== landed);
+    saveNow(); reload();
+  }
+  function relocate(keys, at) {          // put `keys` before entry number `at`
+    const entries = currentEntries();
+    at = clamp(at, 0, entries.length);
+    const before = entries.slice(0, at).filter((e) => e.k && keys.includes(e.k)).length;
+    const rest = entries.filter((e) => !(e.k && keys.includes(e.k)));
+    rest.splice(at - before, 0, ...keys.map((k) => ({ k })));
+    applyEntries(rest, keys);
+  }
+  function moveFav(i, d) {
+    if (!reorderable) return;
+    const entries = currentEntries(); const key = keyOf(items[i]);
+    const idx = entries.findIndex((e) => e.k === key); const j = idx + d;
+    if (idx < 0 || j < 0 || j >= entries.length) return;
+    [entries[idx], entries[j]] = [entries[j], entries[idx]];
+    selKey = key; applyEntries(entries, [key]);
+  }
+  function moveToFolder(keys, folder) {
+    keys.forEach((k) => { const f = S.favorites.find((x) => x.urls[0] === k); if (f) { if (folder) f.folder = folder; else delete f.folder; } });
+    const moving = S.favorites.filter((f) => keys.includes(f.urls[0])); const rest = S.favorites.filter((f) => !keys.includes(f.urls[0]));
+    let last = -1; rest.forEach((f, n) => { if ((f.folder || '') === folder) last = n; });
+    rest.splice(last + 1, 0, ...moving); S.favorites = rest;
+    S.collapsed = S.collapsed.filter((n) => n !== folder);
+    saveNow(); reload();
+  }
+  function askFolderName(title, value, except) {
+    const name = String(window.prompt(title, value || '') || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!name) return '';
+    if (name === UNFILED || (S.folders.includes(name) && name !== except)) { window.alert('已經有這個名稱的資料夾了。'); return ''; }
+    return name;
+  }
+  function newFolder(moveKeys) {
+    const name = askFolderName('新資料夾名稱：'); if (!name) return;
+    S.folders.push(name);
+    if (moveKeys && moveKeys.length) moveToFolder(moveKeys, name); else { saveNow(); reload(); }
+  }
+  function renameFolder(old) {
+    const name = askFolderName('資料夾新名稱：', old, old); if (!name || name === old) return;
+    S.folders = S.folders.map((f) => (f === old ? name : f)); S.collapsed = S.collapsed.map((f) => (f === old ? name : f));
+    S.favorites.forEach((f) => { if (f.folder === old) f.folder = name; });
+    saveNow(); reload();
+  }
+  function deleteFolder(name) {
+    const n = S.favorites.filter((f) => f.folder === name).length;
+    if (!window.confirm(n ? `刪除資料夾「${name}」？\n裡面的 ${n} 個電台不會被刪除，會移到「${UNFILED}」。` : `刪除空的資料夾「${name}」？`)) return;
+    S.favorites.forEach((f) => { if (f.folder === name) delete f.folder; });
+    S.folders = S.folders.filter((f) => f !== name); S.collapsed = S.collapsed.filter((f) => f !== name);
+    saveNow(); reload();
+  }
+  function shiftFolder(name, d) {
+    const i = S.folders.indexOf(name); const j = i + d; if (i < 0 || j < 0 || j >= S.folders.length) return;
+    [S.folders[i], S.folders[j]] = [S.folders[j], S.folders[i]]; saveNow(); reload();
+  }
+  function toggleFolder(name) {
+    S.collapsed = S.collapsed.includes(name) ? S.collapsed.filter((f) => f !== name) : [...S.collapsed, name];
+    saveNow(); reload();
+  }
+  function chooseFolder(keys) {            // small dialog: pick a folder for the station(s)
+    const dlg = $('folderDlg'); const box = $('folderList'); box.replaceChildren();
+    const here = (S.favorites.find((f) => f.urls[0] === keys[0]) || {}).folder || '';
+    ['', ...S.folders].forEach((name) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = `${name ? '📁' : '🗂'}  ${name || UNFILED}`;
+      b.disabled = name === here; b.addEventListener('click', () => { dlg.close(); moveToFolder(keys, name); }); box.append(b);
+    });
+    const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'btn primary'; nb.textContent = '＋ 新增資料夾…';
+    nb.addEventListener('click', () => { dlg.close(); newFolder(keys); }); box.append(nb);
+    dlg.showModal();
+  }
+  $('folderCancel').addEventListener('click', () => $('folderDlg').close());
+  $('folderBtn').addEventListener('click', () => newFolder());
   listEl.addEventListener('click', (e) => {
+    const head = e.target.closest('.fhead');
+    if (head) {
+      const name = head.dataset.folder; const act = e.target.closest('[data-act]');
+      if (!act) toggleFolder(name);
+      else if (act.dataset.act === 'frename') renameFolder(name);
+      else if (act.dataset.act === 'fup') shiftFolder(name, -1);
+      else if (act.dataset.act === 'fdown') shiftFolder(name, 1);
+      else if (act.dataset.act === 'fdel') deleteFolder(name);
+      return;
+    }
     const li = e.target.closest('.row'); if (!li) return;
     const i = +li.dataset.i; const st = items[i]; if (!st) return;
     const act = e.target.closest('[data-act]');
@@ -319,11 +440,37 @@
       if (act.dataset.act === 'fav') toggleFav(st);
       else if (act.dataset.act === 'up') moveFav(i, -1);
       else if (act.dataset.act === 'down') moveFav(i, 1);
+      else if (act.dataset.act === 'folder') chooseFolder([keyOf(st)]);
       return;
     }
     selKey = keyOf(st); markRows(); updateSelectionUi();
     playStation(st);
   });
+  // drag & drop with the mouse (touch screens use the ▲ ▼ 📁 buttons instead)
+  let dragKey = null;
+  const clearDrop = () => listEl.querySelectorAll('.drop-before, .drop-after, .drop-into').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-into'));
+  listEl.addEventListener('dragstart', (e) => {
+    const li = e.target.closest && e.target.closest('.row'); if (!li || !reorderable) return;
+    dragKey = keyOf(items[+li.dataset.i]); li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragKey); } catch (err) { /* ignore */ }
+  });
+  listEl.addEventListener('dragover', (e) => {
+    if (dragKey == null) return;
+    const li = e.target.closest('.row, .fhead'); if (!li) return;
+    e.preventDefault(); clearDrop();
+    if (li.classList.contains('fhead')) li.classList.add('drop-into');
+    else { const r = li.getBoundingClientRect(); li.classList.add(e.clientY > r.top + r.height / 2 ? 'drop-after' : 'drop-before'); }
+  });
+  listEl.addEventListener('dragleave', (e) => { if (!listEl.contains(e.relatedTarget)) clearDrop(); });
+  listEl.addEventListener('drop', (e) => {
+    if (dragKey == null) return;
+    const li = e.target.closest('.row, .fhead'); if (!li) return;
+    e.preventDefault(); clearDrop();
+    const kids = [...listEl.children]; let at = kids.indexOf(li);
+    if (li.classList.contains('row')) { const r = li.getBoundingClientRect(); if (e.clientY > r.top + r.height / 2) at += 1; } else at += 1;
+    const keys = [dragKey]; dragKey = null; relocate(keys, at);
+  });
+  listEl.addEventListener('dragend', () => { dragKey = null; clearDrop(); listEl.querySelectorAll('.dragging').forEach((x) => x.classList.remove('dragging')); });
 
   // ---------------------------------------------------------------- toolbar
   function buildToolbar() {
@@ -357,7 +504,7 @@
     $('segAll').classList.toggle('on', !fav); $('segFav').classList.toggle('on', fav);
     $('sort').value = S.sort; $('country').value = S.country;
     document.querySelectorAll('.chip').forEach((c) => { c.classList.toggle('on', c.dataset.v === S.genre); c.disabled = fav; });
-    $('country').disabled = fav; $('sort').disabled = fav;
+    $('country').disabled = fav; $('sort').disabled = fav; $('rankBtn').hidden = fav; $('folderBtn').hidden = !fav;
     $('search').placeholder = fav ? '🔍 在最愛裡篩選…' : '🔍 輸入電台名稱，按 Enter 搜尋…';
   }
 
@@ -882,16 +1029,22 @@
       bitrate: Math.max(0, parseInt(d.bitrate, 10) || 0),
     };
     if (d.custom) out.custom = true;
+    const folder = String(d.folder || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (folder && folder !== UNFILED) out.folder = folder;
     if (typeof d.favicon === 'string' && /^https?:\/\//i.test(d.favicon)) out.favicon = d.favicon;
     return out;
   }
   function favoritesToJson() {
     const items = S.favorites.map(cleanFavorite).filter(Boolean);
-    return { text: JSON.stringify({ app: 'RadioDeck', version: 1, exported: new Date().toISOString(), favorites: items }, null, 2), count: items.length };
+    return { text: JSON.stringify({ app: 'RadioDeck', version: 1, exported: new Date().toISOString(), folders: folderOrder(items), favorites: items }, null, 2), count: items.length };
   }
-  function favoritesToText() { // one station per line: "name | url"
+  function folderOrder(items) { return [...new Set([...S.folders, ...items.map((f) => f.folder).filter(Boolean)])]; }
+  function favoritesToText() { // one station per line: "name | url"; a "[folder]" line starts a folder
     const items = S.favorites.map(cleanFavorite).filter(Boolean);
-    return { text: items.map((f) => `${f.name.replace(/\s*\|\s*/g, ' ')} | ${f.urls[0]}`).join('\n'), count: items.length };
+    const line = (f) => `${f.name.replace(/\s*\|\s*/g, ' ')} | ${f.urls[0]}`;
+    const out = items.filter((f) => !f.folder).map(line);
+    folderOrder(items).forEach((name) => { out.push(`[${name}]`); items.filter((f) => f.folder === name).forEach((f) => out.push(line(f))); });
+    return { text: out.join('\n'), count: items.length };
   }
   function parseFavorites(text) {
     text = String(text || '').trim().replace(/^﻿/, '');
@@ -902,12 +1055,13 @@
       if (data && !Array.isArray(data) && typeof data === 'object') data = data.favorites;
       if (!Array.isArray(data)) throw new Error('找不到最愛電台清單。');
     } else { // short list: "name | url" per line, or just a URL per line
-      data = [];
+      data = []; let folder = '';
       text.split(/\r?\n/).forEach((line) => {
         line = line.trim(); if (!line || line.startsWith('#')) return;
+        const fm = line.match(/^\[([^\]]{1,40})\]$/); if (fm) { folder = fm[1].trim(); return; }
         const m = line.match(/https?:\/\/\S+/i); if (!m) return;
         const name = line.slice(0, m.index).replace(/[\s|\-–—:：,，\t]+$/, '').trim();
-        data.push({ name, urls: [m[0]], custom: true });
+        data.push({ name, urls: [m[0]], custom: true, folder });
       });
     }
     const items = data.map(cleanFavorite).filter(Boolean);
@@ -919,6 +1073,7 @@
     const have = favKeys(); let added = 0; let http = 0;
     items.forEach((f) => {
       if (have.has(f.urls[0])) return;
+      if (f.folder && !S.folders.includes(f.folder)) S.folders.push(f.folder);
       S.favorites.push(f); have.add(f.urls[0]); added++;
       if (!f.urls.some((u) => /^https:/i.test(u))) http++;
     });

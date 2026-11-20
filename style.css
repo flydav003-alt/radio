@@ -199,3 +199,22 @@ h3 { margin: 6px 0 0; font-size: 13px; color: var(--acc-text); }
 }
 @media (max-width: 899px) and (orientation: landscape) { .head p, .vizwrap { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* favourite folders */
+.fhead { display: flex; align-items: center; gap: 10px; margin: 10px 2px 2px; padding: 8px 12px; border-radius: 9px; background: var(--base-a); color: var(--strong); font-weight: 700; cursor: pointer; position: relative; user-select: none; }
+.fhead:first-child { margin-top: 2px; }
+.fhead::before { content: ""; position: absolute; left: 3px; top: 8px; bottom: 8px; width: 3px; border-radius: 1.5px; background: var(--acc-bar); }
+.fhead:hover { background: var(--raised); }
+.fhead .chev { color: var(--acc-text); width: 14px; text-align: center; }
+.fhead .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fhead .fcount { color: var(--muted); font-size: 12px; font-weight: 500; min-width: 22px; text-align: right; }
+.fhead .ftools { display: flex; gap: 0; }
+.fhead .mv { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px 6px; font-size: 12px; }
+.fhead .mv:hover { color: var(--strong); }
+.row.dragging { opacity: .45; }
+.row.drop-before::after, .row.drop-after::after { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 1px; background: var(--acc-bar); pointer-events: none; }
+.row.drop-before::after { top: -1px; } .row.drop-after::after { bottom: -1px; }
+.fhead.drop-into { outline: 2px solid var(--acc-bar); outline-offset: -2px; }
+.folder-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.folder-list .btn { justify-content: flex-start; text-align: left; }
+.row .mv:last-of-type { margin-right: 0; }
