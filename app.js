@@ -34,7 +34,7 @@
     night: ['夜間模式（柔和低音／高音）', [-6, -4, -1, 0, -1, -3, -5]],
   };
   const THEMES = { obsidian: '黑曜鎏金', tokyo: '東京夜雨', rose: '玫瑰松林', torii: '京都鳥居', rosewater: '玫瑰（淺色）',
-    aurora: '極光夜空', dune: '暮光沙丘', dusk: '暮霧紫灰', haze: '晨曦霧藍（淺色）', washi: '和紙藍染（淺色）' };
+    aurora: '極光夜空', dune: '暮光沙丘', dusk: '暮色紫灰', haze: '晨曦霧藍（淺色）', washi: '和紙藍染（淺色）' };
   const VIZ_STYLES = [['長條', 'bars'], ['鏡像', 'mirror'], ['波形', 'wave'], ['圓環', 'circle'], ['關閉', 'off']];
   const AMBIENT = { off: 0, soft: 0.55, strong: 1 };
   const NOTE_DEFAULT = '已自動排除新聞、談話類電台。電台有沒有人說話由電台自己決定，播到主持人就換下一台。';
